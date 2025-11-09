@@ -86,7 +86,8 @@ class Agent:
         raise NotImplementedError("Subclasses must implement update()")
     
     def train(self, env: gym.Env, num_episodes: int, max_steps: int = 1000,
-              eval_frequency: int = 100, verbose: bool = True) -> Dict[str, List[float]]:
+              eval_frequency: int = 100, verbose: bool = True,
+              save_q_table_at: Optional[List[int]] = None) -> Dict[str, Any]:
         """
         Train the agent in the given environment.
         
@@ -96,10 +97,14 @@ class Agent:
             max_steps: Maximum steps per episode
             eval_frequency: Evaluate every N episodes
             verbose: Print training progress
+            save_q_table_at: List of episode numbers to save Q-table (for QLearningAgent)
             
         Returns:
             Dictionary containing training metrics
         """
+        # Store Q-tables
+        q_tables_log: Dict[int, np.ndarray] = {}
+        
         for episode in range(num_episodes):
             state, _ = env.reset()
             episode_reward = 0.0
@@ -132,6 +137,12 @@ class Agent:
             
             # Decay exploration
             self._decay_epsilon()
+
+            # Save Q-table if requested
+            if save_q_table_at and (episode + 1) in save_q_table_at:
+                # Check if this is the QLearningAgent
+                if hasattr(self, 'q_table'):
+                    q_tables_log[episode + 1] = np.copy(self.q_table)
             
             # Logging
             if verbose and (episode + 1) % eval_frequency == 0:
@@ -145,7 +156,8 @@ class Agent:
         return {
             'rewards': self.episode_rewards,
             'lengths': self.episode_lengths,
-            'losses': self.losses
+            'losses': self.losses,
+            'q_tables': q_tables_log
         }
     
     def evaluate(self, env: gym.Env, num_episodes: int = 10, 

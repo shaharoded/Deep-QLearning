@@ -41,8 +41,8 @@ ENV/
 *~
 
 # Training artifacts
-results/*.png
-results/*.jpg
+# results/*.png
+# results/*.jpg
 results/*.log
 models/*.pth
 models/*.pt
