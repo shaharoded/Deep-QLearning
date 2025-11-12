@@ -1,0 +1,83 @@
+======================================================================
+TRAINING SUMMARY STATISTICS
+======================================================================
+
+Configuration:
+  Environment: FrozenLake-v1
+  Episodes: 10000
+  Max Steps per Episode: 100
+  Alpha: 0.1
+  Gamma: 0.95
+  Epsilon Decay: 0.999
+
+Overall Performance:
+  Total Episodes: 10000
+  Success Rate: 0.495 (49.5%)
+  Average Steps: 31.17
+
+Performance by Training Phase:
+----------------------------------------------------------------------
+
+Initial Exploration (Episodes 1-1000):
+  Success Rate: 0.054 (5.4%)
+  Std Dev: 0.226
+  Average Steps: 10.60
+  Steps Std Dev: 8.36
+
+Learning Phase (Episodes 1001-3000):
+  Success Rate: 0.287 (28.7%)
+  Std Dev: 0.452
+  Average Steps: 23.09
+  Steps Std Dev: 18.08
+
+Refinement Phase (Episodes 3001-5000):
+  Success Rate: 0.532 (53.2%)
+  Std Dev: 0.499
+  Average Steps: 34.21
+  Steps Std Dev: 24.81
+
+Convergence Phase (Episodes 5001-10000):
+  Success Rate: 0.653 (65.3%)
+  Std Dev: 0.476
+  Average Steps: 37.30
+  Steps Std Dev: 24.76
+
+Final 1000 Episodes (Episodes 9001-10000):
+  Success Rate: 0.651 (65.1%)
+  Std Dev: 0.477
+  Average Steps: 37.18
+  Steps Std Dev: 23.96
+
+Final 100 Episodes (Episodes 9901-10000):
+  Success Rate: 0.650 (65.0%)
+  Std Dev: 0.477
+  Average Steps: 38.06
+  Steps Std Dev: 23.80
+
+----------------------------------------------------------------------
+100-Episode Moving Average at Key Points:
+----------------------------------------------------------------------
+
+Episode 100:
+  Success Rate (MA100): 0.010 (1.0%)
+  Average Steps (MA100): 8.24
+
+Episode 500:
+  Success Rate (MA100): 0.040 (4.0%)
+  Average Steps (MA100): 9.64
+
+Episode 1000:
+  Success Rate (MA100): 0.140 (14.0%)
+  Average Steps (MA100): 15.39
+
+Episode 2000:
+  Success Rate (MA100): 0.190 (19.0%)
+  Average Steps (MA100): 21.27
+
+Episode 5000:
+  Success Rate (MA100): 0.320 (32.0%)
+  Average Steps (MA100): 31.83
+
+Episode 10000:
+  Success Rate (MA100): 0.650 (65.0%)
+  Average Steps (MA100): 38.06

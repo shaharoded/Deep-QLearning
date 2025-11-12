@@ -8,9 +8,11 @@ the different agent implementations.
 import gymnasium as gym
 import seaborn as sns
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Dict, List, Any, Optional
 import os
+import json
 
 from agent import QLearningAgent, DeepQLearningAgent, ImprovedDeepQLearningAgent
 
@@ -435,18 +437,33 @@ def run_section_1_frozenlake():
     print("="*60)
     
     env_name = 'FrozenLake-v1'
-    num_episodes = 5000 # As per hw1.docx
-    max_steps = 100    # As per hw1.docx
+    num_episodes = 10000
+    max_steps = 100
     save_q_at = [500, 2000, num_episodes] # As per hw1.docx
     
-    # Hyperparameters to optimize
-    config = {
-        'alpha': 0.1,             # Learning rate
-        'gamma': 0.99,            # Discount factor
-        'epsilon_start': 1.0,
-        'epsilon_min': 0.01,
-        'epsilon_decay': 0.9995 # Slower decay for more episodes
-    }
+    # Load best hyperparameters from tuning results
+    best_config_path = 'results/section1/tuning/best_config.json'
+    
+    if os.path.exists(best_config_path):
+        print(f"\n✓ Loading best hyperparameters from: {best_config_path}")
+        with open(best_config_path, 'r') as f:
+            config = json.load(f)
+        print(f"  Alpha (Learning Rate):     {config['alpha']:.4f}")
+        print(f"  Gamma (Discount Factor):   {config['gamma']:.4f}")
+        print(f"  Epsilon Start:             {config['epsilon_start']:.4f}")
+        print(f"  Epsilon Min:               {config['epsilon_min']:.4f}")
+        print(f"  Epsilon Decay:             {config['epsilon_decay']:.4f}")
+    else:
+        print(f"\n⚠ Warning: {best_config_path} not found!")
+        print("  Using default hyperparameters. Run tune_qlearning.py first for optimal results.")
+        # Fallback to default hyperparameters
+        config = {
+            'alpha': 0.1,             # Learning rate
+            'gamma': 0.99,            # Discount factor
+            'epsilon_start': 1.0,
+            'epsilon_min': 0.01,
+            'epsilon_decay': 0.9995   # Slower decay for more episodes
+        }
     
     # Run training
     agent, metrics = train_agent(
@@ -459,6 +476,127 @@ def run_section_1_frozenlake():
         env_kwargs={'is_slippery': True} # Standard environment
     )
     
+    # --- Save Training Data as Text Files ---
+    
+    save_dir = 'results/section1'
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # 1. Save episode-by-episode metrics
+    metrics_df = pd.DataFrame({
+        'episode': range(1, len(metrics['rewards']) + 1),
+        'reward': metrics['rewards'],
+        'steps': metrics['lengths']
+    })
+    metrics_df.to_csv(f'{save_dir}/training_metrics.csv', index=False)
+    print(f"\n✓ Training metrics saved to: {save_dir}/training_metrics.csv")
+    
+    # 2. Save summary statistics
+    with open(f'{save_dir}/training_summary.txt', 'w') as f:
+        f.write("="*70 + "\n")
+        f.write("TRAINING SUMMARY STATISTICS\n")
+        f.write("="*70 + "\n\n")
+        
+        f.write("Configuration:\n")
+        f.write(f"  Environment: {env_name}\n")
+        f.write(f"  Episodes: {num_episodes}\n")
+        f.write(f"  Max Steps per Episode: {max_steps}\n")
+        f.write(f"  Alpha: {config['alpha']}\n")
+        f.write(f"  Gamma: {config['gamma']}\n")
+        f.write(f"  Epsilon Decay: {config['epsilon_decay']}\n\n")
+        
+        rewards = np.array(metrics['rewards'])
+        lengths = np.array(metrics['lengths'])
+        
+        # Overall statistics
+        f.write("Overall Performance:\n")
+        f.write(f"  Total Episodes: {len(rewards)}\n")
+        f.write(f"  Success Rate: {np.mean(rewards):.3f} ({np.mean(rewards)*100:.1f}%)\n")
+        f.write(f"  Average Steps: {np.mean(lengths):.2f}\n\n")
+        
+        # Statistics by phase
+        phases = [
+            (0, 1000, "Initial Exploration"),
+            (1000, 3000, "Learning Phase"),
+            (3000, 5000, "Refinement Phase"),
+            (5000, 10000, "Convergence Phase"),
+            (9000, 10000, "Final 1000 Episodes"),
+            (9900, 10000, "Final 100 Episodes")
+        ]
+        
+        f.write("Performance by Training Phase:\n")
+        f.write("-" * 70 + "\n")
+        for start, end, name in phases:
+            phase_rewards = rewards[start:end]
+            phase_lengths = lengths[start:end]
+            f.write(f"\n{name} (Episodes {start+1}-{end}):\n")
+            f.write(f"  Success Rate: {np.mean(phase_rewards):.3f} ({np.mean(phase_rewards)*100:.1f}%)\n")
+            f.write(f"  Std Dev: {np.std(phase_rewards):.3f}\n")
+            f.write(f"  Average Steps: {np.mean(phase_lengths):.2f}\n")
+            f.write(f"  Steps Std Dev: {np.std(phase_lengths):.2f}\n")
+        
+        # Moving averages at key points
+        f.write("\n" + "-" * 70 + "\n")
+        f.write("100-Episode Moving Average at Key Points:\n")
+        f.write("-" * 70 + "\n")
+        checkpoints = [100, 500, 1000, 2000, 5000, 10000]
+        for cp in checkpoints:
+            if cp <= len(rewards):
+                start_idx = max(0, cp - 100)
+                ma_rewards = np.mean(rewards[start_idx:cp])
+                ma_lengths = np.mean(lengths[start_idx:cp])
+                f.write(f"\nEpisode {cp}:\n")
+                f.write(f"  Success Rate (MA100): {ma_rewards:.3f} ({ma_rewards*100:.1f}%)\n")
+                f.write(f"  Average Steps (MA100): {ma_lengths:.2f}\n")
+    
+    print(f"✓ Training summary saved to: {save_dir}/training_summary.txt")
+    
+    # 3. Save Q-tables as text
+    q_tables = metrics.get('q_tables', {})
+    for episode, q_table in q_tables.items():
+        # Save full Q-table
+        np.savetxt(f'{save_dir}/q_table_ep{episode}.txt', q_table, 
+                   fmt='%.4f', delimiter='\t',
+                   header=f'Q-Table at Episode {episode}\nRows=States, Columns=Actions [Left, Down, Right, Up]')
+        
+        # Save value function and policy
+        v_values = np.max(q_table, axis=1)
+        policy = np.argmax(q_table, axis=1)
+        action_names = ['Left', 'Down', 'Right', 'Up']
+        
+        with open(f'{save_dir}/policy_ep{episode}.txt', 'w', encoding='utf-8') as f:
+            f.write("="*70 + "\n")
+            f.write(f"VALUE FUNCTION AND POLICY AT EPISODE {episode}\n")
+            f.write("="*70 + "\n\n")
+            f.write("State | V(s)   | Policy | Grid Position\n")
+            f.write("-" * 50 + "\n")
+            for state in range(len(v_values)):
+                row = state // 4
+                col = state % 4
+                f.write(f"{state:5d} | {v_values[state]:6.4f} | {action_names[policy[state]]:6s} | ({row}, {col})\n")
+            
+            f.write("\n" + "="*70 + "\n")
+            f.write("POLICY AS 4x4 GRID (← ↓ → ↑)\n")
+            f.write("="*70 + "\n")
+            symbols = {0: '←', 1: '↓', 2: '→', 3: '↑'}
+            for row in range(4):
+                f.write("  ")
+                for col in range(4):
+                    state = row * 4 + col
+                    f.write(f"{symbols[policy[state]]}  ")
+                f.write("\n")
+            
+            f.write("\n" + "="*70 + "\n")
+            f.write("VALUE FUNCTION AS 4x4 GRID\n")
+            f.write("="*70 + "\n")
+            for row in range(4):
+                f.write("  ")
+                for col in range(4):
+                    state = row * 4 + col
+                    f.write(f"{v_values[state]:5.3f}  ")
+                f.write("\n")
+    
+    print(f"✓ Q-tables and policies saved as text files")
+    
     # --- Plotting Results ---
     
     # 1. Plot reward per episode and steps to goal
@@ -466,7 +604,6 @@ def run_section_1_frozenlake():
                           save_path='results/section1/frozenlake_training.png')
     
     # 2. Plot Q-value tables
-    q_tables = metrics.get('q_tables', {})
     for episode, q_table in q_tables.items():
         title = f"Q-Table (V(s) and Policy) at Episode {episode}"
         plot_q_table_heatmap(q_table, title, 
