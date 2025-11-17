@@ -15,8 +15,8 @@ from typing import Tuple, List, Optional, Dict, Any
 import gymnasium as gym
 
 # Local imports
-from src.utils import ReplayBuffer
-from src.ffnn import QNetwork, DuelingQNetwork
+from src.utils import ReplayBuffer, PrioritizedReplayBuffer
+from src.ffnn import QNetwork
 
 
 class Agent:
@@ -540,15 +540,17 @@ class DeepQLearningAgent(Agent):
         print(f"Model loaded from {filepath}")
 
 
-class ImprovedDeepQLearningAgent(DeepQLearningAgent):
+class DoubleDeepQLearningAgent(DeepQLearningAgent):
     """
-    Improved DQN agent with modern enhancements.
+    Improved DQN agent with Double DQN and Prioritized Experience Replay.
     
-    Implements:
-    - Double DQN: Reduces overestimation bias
-    - Dueling architecture: Separates state value and advantage
-    - Prioritized experience replay: Samples important transitions more frequently
-    - Additional improvements can be added (e.g., noisy networks, distributional RL)
+    Improvements:
+    1. Double DQN: Reduces overestimation bias by decoupling action selection and evaluation
+    2. Prioritized Experience Replay: Samples important transitions more frequently
+    
+    References:
+    - van Hasselt et al. (2015) - Deep Reinforcement Learning with Double Q-learning
+    - Schaul et al. (2015) - Prioritized Experience Replay
     """
     
     def __init__(self, state_dim: int, action_dim: int, config: Optional[Dict[str, Any]] = None):
@@ -558,33 +560,55 @@ class ImprovedDeepQLearningAgent(DeepQLearningAgent):
         Args:
             state_dim: Dimension of state space
             action_dim: Number of possible actions
-            config: Configuration dictionary
+            config: Configuration dictionary with keys:
+                - use_double_dqn: Enable Double DQN (default: True)
+                - use_prioritized_replay: Enable prioritized replay (default: False)
+                - priority_alpha: Priority exponent (default: 0.6)
+                - priority_beta: Importance sampling exponent (default: 0.4)
+                - priority_beta_increment: Beta increment per sample (default: 0.001)
+                - ... (all DeepQLearningAgent config options)
         """
-        # Initialize parent (will be customized below)
+        # Store improvement flags before calling parent
+        self.use_double_dqn = config.get('use_double_dqn', True) if config else True
+        self.use_prioritized_replay = config.get('use_prioritized_replay', False) if config else False
+        
+        # Warn if both improvements are disabled
+        if not self.use_double_dqn and not self.use_prioritized_replay:
+            print("\n" + "="*70)
+            print("WARNING: Both Double DQN and Prioritized Replay are disabled!")
+            print("This is equivalent to standard DeepQLearningAgent.")
+            print("Consider using DeepQLearningAgent directly instead.")
+            print("="*70 + "\n")
+        
+        # Initialize parent class (standard DQN)
         super().__init__(state_dim, action_dim, config)
         
-        # Improvement flags
-        self.use_double_dqn = self.config.get('use_double_dqn', True)
-        self.use_dueling = self.config.get('use_dueling', True)
-        self.use_prioritized_replay = self.config.get('use_prioritized_replay', False)
-        
-        # Replace networks with dueling architecture if enabled
-        if self.use_dueling:
-            self.q_network = DuelingQNetwork(state_dim, action_dim, self.hidden_dims)
-            self.target_network = DuelingQNetwork(state_dim, action_dim, self.hidden_dims)
-            self.target_network.load_state_dict(self.q_network.state_dict())
-            
-            # Reinitialize optimizer with new network
-            self.optimizer = optim.Adam(self.q_network.parameters(), lr=self.learning_rate)
-        
-        # TODO: Implement prioritized experience replay
+        # Replace replay buffer with prioritized version if enabled
         if self.use_prioritized_replay:
-            print("Note: Prioritized replay not yet implemented, using standard replay.")
+            priority_alpha = self.config.get('priority_alpha', 0.6)
+            priority_beta = self.config.get('priority_beta', 0.4)
+            priority_beta_increment = self.config.get('priority_beta_increment', 0.001)
+            
+            self.replay_buffer = PrioritizedReplayBuffer(
+                capacity=self.buffer_capacity,
+                alpha=priority_alpha,
+                beta=priority_beta,
+                beta_increment=priority_beta_increment
+            )
+            print(f"Using Prioritized Experience Replay (α={priority_alpha}, β={priority_beta})")
     
     def update(self, state: np.ndarray, action: int, reward: float,
                next_state: np.ndarray, done: bool) -> Optional[float]:
         """
-        Update with Double DQN and other improvements.
+        Update with Double DQN and/or Prioritized Experience Replay.
+        
+        Double DQN:
+        - Standard DQN: y = r + γ max_a' Q_target(s', a')
+        - Double DQN: y = r + γ Q_target(s', argmax_a' Q(s', a'))
+        
+        Prioritized Replay:
+        - Sample based on TD error priorities
+        - Apply importance sampling weights to loss
         
         Args:
             state: Current state
@@ -596,32 +620,55 @@ class ImprovedDeepQLearningAgent(DeepQLearningAgent):
         Returns:
             Loss value if update was performed, None otherwise
         """
-        # Store transition
-        self.replay_buffer.push(state, action, reward, next_state, done)
+        # Store transition (will compute TD error after if using prioritized replay)
+        if self.use_prioritized_replay:
+            # Store with max priority initially
+            self.replay_buffer.push(state, action, reward, next_state, done, td_error=None)
+        else:
+            self.replay_buffer.push(state, action, reward, next_state, done)
         
+        # Only update if buffer has enough samples
         if len(self.replay_buffer) < self.batch_size:
             return None
         
         # Sample minibatch
-        states, actions, rewards, next_states, dones = self.replay_buffer.sample(self.batch_size)
+        if self.use_prioritized_replay:
+            states, actions, rewards, next_states, dones, weights, indices = self.replay_buffer.sample(self.batch_size)
+        else:
+            states, actions, rewards, next_states, dones = self.replay_buffer.sample(self.batch_size)
+            weights = torch.ones(self.batch_size)
+            indices = None
         
-        # Compute current Q-values
+        # Ensure Q-network is in training mode
+        self.q_network.train()
+        
+        # Compute current Q-values Q(s, a)
         current_q_values = self.q_network(states).gather(1, actions.unsqueeze(1)).squeeze(1)
         
         # Compute target Q-values
         with torch.no_grad():
             if self.use_double_dqn:
                 # Double DQN: Use online network for action selection, target network for evaluation
+                # argmax_a' Q(s', a') - select best action using online network
                 next_actions = self.q_network(next_states).argmax(dim=1, keepdim=True)
+                # Q_target(s', argmax_a' Q(s', a')) - evaluate using target network
                 next_q_values = self.target_network(next_states).gather(1, next_actions).squeeze(1)
             else:
-                # Standard DQN
+                # Standard DQN: max_a' Q_target(s', a')
                 next_q_values = self.target_network(next_states).max(dim=1)[0]
             
             target_q_values = rewards + (1 - dones) * self.gamma * next_q_values
         
-        # Compute loss
-        loss = self.criterion(current_q_values, target_q_values)
+        # Compute TD errors for priority updates
+        td_errors = (target_q_values - current_q_values).detach().cpu().numpy()
+        
+        # Compute weighted loss
+        if self.use_prioritized_replay:
+            # Apply importance sampling weights
+            elementwise_loss = (current_q_values - target_q_values) ** 2
+            loss = (weights * elementwise_loss).mean()
+        else:
+            loss = self.criterion(current_q_values, target_q_values)
         
         # Optimize
         self.optimizer.zero_grad()
@@ -632,33 +679,16 @@ class ImprovedDeepQLearningAgent(DeepQLearningAgent):
         
         self.optimizer.step()
         
+        # Update priorities if using prioritized replay
+        if self.use_prioritized_replay and indices is not None:
+            self.replay_buffer.update_priorities(indices, td_errors)
+        
         # Update target network
         self.training_steps += 1
         if self.training_steps % self.target_update_freq == 0:
             self.target_network.load_state_dict(self.q_network.state_dict())
         
         return loss.item()
-    
-    def save(self, filepath: str):
-        """Save network parameters to file."""
-        torch.save({
-            'q_network': self.q_network.state_dict(),
-            'target_network': self.target_network.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
-            'training_steps': self.training_steps,
-            'epsilon': self.epsilon
-        }, filepath)
-        print(f"Model saved to {filepath}")
-    
-    def load(self, filepath: str):
-        """Load network parameters from file."""
-        checkpoint = torch.load(filepath)
-        self.q_network.load_state_dict(checkpoint['q_network'])
-        self.target_network.load_state_dict(checkpoint['target_network'])
-        self.optimizer.load_state_dict(checkpoint['optimizer'])
-        self.training_steps = checkpoint['training_steps']
-        self.epsilon = checkpoint['epsilon']
-        print(f"Model loaded from {filepath}")
 
 
 if __name__ == "__main__":
@@ -695,8 +725,8 @@ if __name__ == "__main__":
                                            config=config_5_layers)
         print("✓ DeepQLearningAgent initialized (5 hidden layers)")
         
-        agent3 = ImprovedDeepQLearningAgent(state_dim=state_dim, action_dim=action_dim)
-        print("✓ ImprovedDeepQLearningAgent initialized")
+        agent3 = DoubleDeepQLearningAgent(state_dim=state_dim, action_dim=action_dim)
+        print("✓ DoubleDeepQLearningAgent initialized")
         
         print("\nAll agents initialized successfully!")
         print("\nTo train an agent, use:")

@@ -6,14 +6,14 @@ from .agent import (
     Agent,
     QLearningAgent,
     DeepQLearningAgent,
-    ImprovedDeepQLearningAgent
+    DoubleDeepQLearningAgent
 )
 
 __all__ = [
     'Agent',
     'QLearningAgent',
     'DeepQLearningAgent',
-    'ImprovedDeepQLearningAgent'
+    'DoubleDeepQLearningAgent'
 ]
 
 __version__ = '1.0.0'

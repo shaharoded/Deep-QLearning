@@ -14,7 +14,7 @@ from typing import Dict, List, Any, Optional
 import os
 import json
 
-from src.agent import QLearningAgent, DeepQLearningAgent, ImprovedDeepQLearningAgent
+from src.agent import DoubleDeepQLearningAgent, QLearningAgent, DeepQLearningAgent, ImprovedDeepQLearningAgent
 
 
 def plot_training_results(metrics: Dict[str, List[float]], agent_name: str, save_path: str = None):
@@ -173,9 +173,9 @@ def compare_agents(env_name: str = 'CartPole-v1', num_episodes: int = 500):
     }
     
     # Train Improved Deep Q-Learning agent
-    print("\n[2/2] Training ImprovedDeepQLearningAgent...")
+    print("\n[2/2] Training DoubleDeepQLearningAgent...")
     improved_agent, improved_metrics = train_agent(
-        ImprovedDeepQLearningAgent,
+        DoubleDeepQLearningAgent,
         env_name=env_name,
         num_episodes=num_episodes,
         config=improved_config
@@ -261,7 +261,7 @@ def run_example_cartpole():
     }
     
     agent, metrics = train_agent(
-        ImprovedDeepQLearningAgent,
+        DoubleDeepQLearningAgent,
         env_name=env_name,
         num_episodes=num_episodes,
         config=config
@@ -306,7 +306,7 @@ def run_example_custom_env():
     
     try:
         agent, metrics = train_agent(
-            ImprovedDeepQLearningAgent,
+            DoubleDeepQLearningAgent,
             env_name=env_name,
             num_episodes=1000,
             config=config
