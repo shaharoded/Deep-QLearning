@@ -142,9 +142,6 @@ class Agent:
             self.episode_lengths.append(step_count)
             if episode_loss > 0:
                 self.losses.append(episode_loss / step_count)
-            
-            # Decay exploration
-            self._decay_epsilon()
 
             # Save Q-table if requested
             if save_q_table_at and (episode + 1) in save_q_table_at:
@@ -247,10 +244,6 @@ class Agent:
         """Load agent parameters from file."""
         raise NotImplementedError("Subclasses must implement load()")
     
-    def _decay_epsilon(self):
-        """Decay exploration rate using exponential decay."""
-        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
-
 
 class QLearningAgent(Agent):
     """
@@ -516,6 +509,9 @@ class DeepQLearningAgent(Agent):
         if self.training_steps % self.target_update_freq == 0:
             self.target_network.load_state_dict(self.q_network.state_dict())
         
+        # step based epsilon decay
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+        
         return loss.item()
     
     def save(self, filepath: str):
@@ -687,6 +683,9 @@ class DoubleDeepQLearningAgent(DeepQLearningAgent):
         self.training_steps += 1
         if self.training_steps % self.target_update_freq == 0:
             self.target_network.load_state_dict(self.q_network.state_dict())
+        
+        # step based epsilon decay
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
         
         return loss.item()
 
