@@ -14,24 +14,24 @@ This project implements three reinforcement learning agents:
 ```
 Root/
 ├── src/
-│   ├── init.py                     # Package initialization
-│   ├── agent.py                    # Agent implementations
-│   │ ├── Agent                     # Base class
-│   │ ├── QLearningAgent            # Tabular Q-Learning
-│   │ ├── DeepQLearningAgent        # Standard DQN
-│   │ └── DoubleDeepQLearningAgent  # Double DQN
-│   ├── ffnn.py                     # Neural network architectures
-│   │ └── QNetwork                  # Feedforward Q-network
-│   └── utils.py                    # Replay buffers and utilities
-│   ├── ReplayBuffer                # Standard uniform replay
-│   └── PrioritizedReplayBuffer     # Priority-based replay
-├── train-test-agents.ipynb         # Main notebook for training and evaluation
-├── results/                        # Training outputs (plots, summaries, policies)
-│   ├── section1/                   # Q-Learning results
-│   ├── section2/                   # DQN results
-│   └── section3/                   # Double DQN results
-├── models/                         # Saved model checkpoints
-└── requirements.txt                # Python dependencies
+│   ├── init.py                         # Package initialization
+│   ├── agent.py                        # Agent implementations
+│   │   ├── Agent                       # Base class
+│   │   ├── QLearningAgent              # Tabular Q-Learning
+│   │   ├── DeepQLearningAgent          # Standard DQN
+│   │   └── DoubleDeepQLearningAgent    # Double DQN
+│   ├── ffnn.py                         # Neural network architectures
+│   │   └── QNetwork                    # Feedforward Q-network
+│   └── utils.py                        # Replay buffers and utilities
+│       ├── ReplayBuffer                # Standard uniform replay
+│       └── PrioritizedReplayBuffer     # Priority-based replay
+├── train-test-agents.ipynb             # Main notebook for training and evaluation
+├── results/                            # Training outputs (plots, summaries, policies)
+│   ├── section1/                       # Q-Learning results
+│   ├── section2/                       # DQN results
+│   └── section3/                       # Double DQN results
+├── models/                             # Saved model checkpoints
+└── requirements.txt                    # Python dependencies
 ```
 
 ## Agents
@@ -86,9 +86,3 @@ Each agent can be evaluated on:
 
 ## Results
 Results including training curves and performance metrics will be saved in the `results/` directory.
-
-## References
-- Sutton & Barto - Reinforcement Learning: An Introduction
-- Mnih et al. - Playing Atari with Deep Reinforcement Learning (DQN)
-- Van Hasselt et al. - Deep Reinforcement Learning with Double Q-learning
-- Wang et al. - Dueling Network Architectures for Deep Reinforcement Learning
